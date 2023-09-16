@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rfcarreira33/postui/styles"
@@ -15,11 +18,13 @@ import (
 
 type status int
 
-const divisor = 5
+const Xdivisor = 4
+const Ydivisor = 3
 
 const (
 	method status = iota
 	url
+	viewer
 )
 
 type Request struct {
@@ -32,6 +37,8 @@ type MainModel struct {
 	focused  status
 	urlInput textinput.Model
 	lists    []list.Model
+	viewport viewport.Model
+	help     help.Model
 	err      error
 	quitting bool
 	editing  bool
@@ -52,7 +59,7 @@ func (m *MainModel) Next() {
 	if m.editing {
 		return
 	}
-	if m.focused == url {
+	if m.focused == viewer {
 		m.focused = method
 	} else {
 		m.focused++
@@ -64,14 +71,15 @@ func (m *MainModel) Prev() {
 		return
 	}
 	if m.focused == method {
-		m.focused = url
+		m.focused = viewer
 	} else {
 		m.focused--
 	}
 }
 
+// Init Functions
 func (m *MainModel) initLists(width, height int) {
-	defaultList := list.New([]list.Item{}, ui.ItemDelegate{}, width/divisor*3, height/divisor*2)
+	defaultList := list.New([]list.Item{}, ui.ItemDelegate{}, width/Xdivisor, height/Ydivisor)
 	defaultList.SetShowHelp(false)
 	defaultList.SetShowStatusBar(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
@@ -92,7 +100,16 @@ func (m *MainModel) initTextInput(width int) {
 	m.urlInput = textinput.New()
 	m.urlInput.Placeholder = "URL"
 	m.urlInput.CharLimit = 100
-	m.urlInput.Width = width / divisor * 3
+	m.urlInput.Width = width / Xdivisor * 2
+}
+
+func (m *MainModel) initViewPort(width, height int) {
+	m.viewport = viewport.New(width, height/Ydivisor-Ydivisor)
+}
+
+func (m *MainModel) initHelp(width int) {
+	m.help = help.New()
+	m.help.Width = width / Xdivisor
 }
 
 func (m MainModel) Init() tea.Cmd {
@@ -100,11 +117,14 @@ func (m MainModel) Init() tea.Cmd {
 }
 
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle key presses
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		if !m.loaded {
 			m.initLists(msg.Width, msg.Height)
 			m.initTextInput(msg.Width)
+			m.initViewPort(msg.Width, msg.Height)
+			m.initHelp(msg.Width)
 			m.loaded = true
 		}
 	case tea.KeyMsg:
@@ -118,26 +138,49 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Next()
 		case "R":
 			m.req.method = string(m.lists[method].SelectedItem().(ui.Item))
-			curl := exec.Command("curl", "-X", m.req.method, m.req.url)
-			curl.Stdout = os.Stdout
-			curl.Stderr = os.Stderr
-			curl.Run()
+			curl := exec.Command("curl", "-X", m.req.method, "-H", "Content-Type: application/json", m.req.url)
+			output, err := curl.Output()
+			if err != nil {
+				m.viewport.SetContent("Error running curl check your URL")
+				break
+			}
+			var data interface{}
+			json.Unmarshal(output, &data)
+			formattedJSON, err := json.MarshalIndent(data, "", "  ")
+			if err != nil {
+				m.viewport.SetContent("Error formatting JSON")
+				break
+			}
+			m.viewport.SetContent(string(formattedJSON))
+		case "?":
+			if !m.editing {
+				m.help.ShowAll = !m.help.ShowAll
+			}
 		case "enter":
 			if m.focused == url {
 				if !m.editing {
 					m.urlInput.Focus()
-					m.editing = true
+					m.editing = !m.editing
 				} else {
 					m.req.url = m.urlInput.Value()
-					m.editing = false
+					m.editing = !m.editing
 					m.urlInput.Blur()
 				}
 			}
 		}
 	}
+
+	// Update the focused component
 	var cmd tea.Cmd
-	m.urlInput, cmd = m.urlInput.Update(msg)
-	m.lists[m.focused], cmd = m.lists[m.focused].Update(msg)
+	switch m.focused {
+	case method:
+		m.lists[m.focused], cmd = m.lists[m.focused].Update(msg)
+	case url:
+		m.urlInput, cmd = m.urlInput.Update(msg)
+	case viewer:
+		m.viewport, cmd = m.viewport.Update(msg)
+	}
+	m.help, _ = m.help.Update(msg)
 	return m, cmd
 }
 
@@ -148,19 +191,51 @@ func (m MainModel) View() string {
 	if m.loaded {
 		methodView := m.lists[method].View()
 		urlView := m.urlInput.View()
+		viewerView := m.viewport.View()
+		helpView := m.help.View(ui.Keys)
 
 		switch m.focused {
 		case url:
 			return lipgloss.JoinHorizontal(
 				lipgloss.Left,
-				styles.ColumnStyle.Render(methodView),
-				styles.FocusedStyle.Render(urlView),
+				lipgloss.JoinVertical(
+					lipgloss.Top,
+					styles.ColumnStyle.Render(methodView),
+					styles.ColumnStyle.Render(helpView),
+				),
+				lipgloss.JoinVertical(
+					lipgloss.Top,
+					styles.FocusedStyle.Render(urlView),
+					styles.ColumnStyle.Render(viewerView),
+				),
+			)
+		case viewer:
+			return lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				lipgloss.JoinVertical(
+					lipgloss.Top,
+					styles.ColumnStyle.Render(methodView),
+					styles.ColumnStyle.Render(helpView),
+				),
+				lipgloss.JoinVertical(
+					lipgloss.Top,
+					styles.ColumnStyle.Render(urlView),
+					styles.FocusedStyle.Render(viewerView),
+				),
 			)
 		default:
 			return lipgloss.JoinHorizontal(
 				lipgloss.Left,
-				styles.FocusedStyle.Render(methodView),
-				styles.ColumnStyle.Render(urlView),
+				lipgloss.JoinVertical(
+					lipgloss.Top,
+					styles.FocusedStyle.Render(methodView),
+					styles.ColumnStyle.Render(helpView),
+				),
+				lipgloss.JoinVertical(
+					lipgloss.Top,
+					styles.ColumnStyle.Render(urlView),
+					styles.ColumnStyle.Render(viewerView),
+				),
 			)
 		}
 	} else {
