@@ -6,8 +6,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	lg "github.com/charmbracelet/lipgloss"
-	styles "github.com/rfcarreira33/postui/styles"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/rfcarreira33/postui/config"
+	"github.com/rfcarreira33/postui/ui/base"
 	"github.com/rfcarreira33/postui/ui/tabs"
 	"github.com/rfcarreira33/postui/ui/viewport"
 )
@@ -24,6 +25,7 @@ type MainModel struct {
 	height   int
 	req      Request
 	tabs     tabs.Model
+	base     base.Model
 	viewport viewport.Model
 	insert   bool
 	view     bool
@@ -35,7 +37,7 @@ func New() *MainModel {
 	headers := make(map[string]string)
 	headers["Content-Type"] = "application/json"
 	req := Request{
-		url:     "https://dummyjson.com/products/1",
+		url:     "",
 		method:  "GET",
 		headers: headers,
 	}
@@ -43,6 +45,7 @@ func New() *MainModel {
 	return &MainModel{
 		req:      req,
 		tabs:     tabs.New(),
+		base:     base.New(),
 		viewport: viewport.New(),
 	}
 }
@@ -57,49 +60,75 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		if !m.loaded {
 			m.loaded = true
-			m.width = msg.Width - 10
-			m.height = msg.Height
-			m.tabs.SetWidth(msg.Width)
-			m.viewport.SetSize(msg.Width, msg.Height)
+			m.width = msg.Width
+			m.height = msg.Height - 5
+			m.tabs.SetWidth(m.width)
+			m.viewport.SetSize(m.width, m.height)
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			m.quitting = true
-			return m, tea.Quit
-		case "v":
-			m.view = !m.view
+			if !m.insert {
+				m.quitting = true
+				return m, tea.Quit
+			}
+		case "esc":
+			m.insert = false
+			m.view = false
 		case "i":
-			m.insert = !m.insert
+			m.insert = true
+		case "v":
+			m.view = true
 		case "R":
-			m.req.method = "GET"
-			curl := exec.Command("curl", "-X", m.req.method, m.req.url)
-			for k, v := range m.req.headers {
-				curl.Args = append(curl.Args, "-H", k+": "+v)
+			if !m.insert {
+				m.req.method = m.base.GetMethod()
+				m.req.url = m.base.GetURL()
+				curl := exec.Command("curl", "-X", m.req.method, m.req.url)
+				for k, v := range m.req.headers {
+					curl.Args = append(curl.Args, "-H", k+": "+v)
+				}
+				output, err := curl.Output()
+				if err != nil {
+					m.viewport.SetContent("Error running curl check your URL")
+					break
+				}
+				var data interface{}
+				json.Unmarshal(output, &data)
+				formattedJSON, err := json.MarshalIndent(data, "", "  ")
+				if err != nil {
+					m.viewport.SetContent("Error formatting JSON")
+					break
+				}
+				m.viewport.SetContent(string(formattedJSON))
 			}
-			output, err := curl.Output()
-			if err != nil {
-				m.viewport.SetContent("Error running curl check your URL")
-				break
-			}
-			var data interface{}
-			json.Unmarshal(output, &data)
-			formattedJSON, err := json.MarshalIndent(data, "", "  ")
-			if err != nil {
-				m.viewport.SetContent("Error formatting JSON")
-				break
-			}
-			m.viewport.SetContent(string(formattedJSON))
 		}
 	}
 
-	// Update the focused component
 	var cmd tea.Cmd
+	if !m.insert {
+		m.tabs, cmd = m.tabs.Update(msg)
+	}
 	if m.view {
 		m.viewport, cmd = m.viewport.Update(msg)
+	} else {
+		switch m.tabs.GetFocused() {
+		default:
+			m.base, cmd = m.base.Update(msg)
+		}
 	}
-	m.tabs, cmd = m.tabs.Update(msg)
 	return m, cmd
+}
+
+func (m MainModel) renderTab() string {
+	var tabContent = map[config.Status]string{
+		config.Params:  "Params Tab",
+		config.Auth:    "Authorization Tab",
+		config.Headers: "Headers Tab",
+		config.Body:    "Body Tab",
+		config.Base:    m.base.View(),
+	}
+
+	return lipgloss.PlaceVertical(m.height/3, lipgloss.Top, tabContent[m.tabs.GetFocused()])
 }
 
 func (m MainModel) View() string {
@@ -110,12 +139,11 @@ func (m MainModel) View() string {
 		sb := strings.Builder{}
 		sb.WriteString(m.tabs.View())
 		sb.WriteString("\n")
-		sb.WriteString(lg.Place(m.width, m.height/3+4, lg.Left, lg.Top, "Press 'R' to run curl command"))
+		sb.WriteString(m.renderTab())
 		sb.WriteString("\n")
-		sb.WriteString(strings.Repeat("─", m.width+4))
 		sb.WriteString("\n")
 		sb.WriteString(m.viewport.View())
-		return styles.FocusedStyle.Render(sb.String())
+		return sb.String()
 	} else {
 		return "loading..."
 	}

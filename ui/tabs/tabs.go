@@ -4,13 +4,14 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	lg "github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rfcarreira33/postui/config"
+	"github.com/rfcarreira33/postui/styles"
 )
 
 // Tabs styling
 var (
-	activeTabBorder = lg.Border{
+	activeTabBorder = lipgloss.Border{
 		Top:         "─",
 		Bottom:      " ",
 		Left:        "│",
@@ -21,7 +22,7 @@ var (
 		BottomRight: "└",
 	}
 
-	tabBorder = lg.Border{
+	tabBorder = lipgloss.Border{
 		Top:         "─",
 		Bottom:      "─",
 		Left:        "│",
@@ -32,9 +33,9 @@ var (
 		BottomRight: "┴",
 	}
 
-	inactiveTab = lg.NewStyle().
+	inactiveTab = lipgloss.NewStyle().
 			Border(tabBorder, true).
-			BorderForeground(lg.Color("202")).
+			BorderForeground(styles.Orange).
 			Padding(0, 1)
 
 	activeTab = inactiveTab.Copy().Border(activeTabBorder, true)
@@ -52,7 +53,8 @@ type Model struct {
 
 func New() Model {
 	return Model{
-		width: 100,
+		focused: config.Base,
+		width:   100,
 	}
 }
 
@@ -66,7 +68,11 @@ func (m *Model) Next() {
 }
 
 func (m *Model) Prev() {
-	m.focused = (m.focused - 1) % config.NUM_TABS
+	m.focused = (m.focused - 1 + config.NUM_TABS) % config.NUM_TABS
+}
+
+func (m *Model) GetFocused() config.Status {
+	return m.focused
 }
 
 func (m *Model) SetWidth(w int) {
@@ -80,9 +86,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "l", "right":
+		case "L":
 			m.Next()
-		case "h", "left":
+		case "H":
 			m.Prev()
 		}
 	}
@@ -104,14 +110,7 @@ func (m Model) View() string {
 	}
 
 	// Join the tabs horizontally
-	row := lg.JoinHorizontal(lg.Top, rows...)
-	gap := tabGap.Render(strings.Repeat(" ", m.width-62))
-	return lg.JoinHorizontal(lg.Bottom, row, gap) + "\n\n"
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+	row := lipgloss.JoinHorizontal(lipgloss.Top, rows...)
+	gap := tabGap.Render(strings.Repeat(" ", config.Max(0, m.width-lipgloss.Width(row)-2)))
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, row, gap) + "\n\n"
 }

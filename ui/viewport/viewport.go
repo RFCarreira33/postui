@@ -1,8 +1,20 @@
 package viewport
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/rfcarreira33/postui/config"
+)
+
+var (
+	titleStyle = func() lipgloss.Style {
+		b := lipgloss.RoundedBorder()
+		b.Right = "├"
+		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
+	}()
 )
 
 type Model struct {
@@ -24,8 +36,8 @@ func (m *Model) SetContent(content string) {
 }
 
 func (m *Model) SetSize(w, h int) {
-	m.viewport.Width = w - 10
-	m.viewport.Height = h/3 + 4
+	m.viewport.Width = w
+	m.viewport.Height = h/3*2 - 3
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
@@ -33,8 +45,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.SetSize(msg.Width, msg.Height)
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "j", "down":
@@ -52,6 +62,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m Model) headerView() string {
+	title := titleStyle.Render("Response")
+	line := strings.Repeat("─", config.Max(0, m.viewport.Width-lipgloss.Width(title)))
+	return lipgloss.JoinHorizontal(lipgloss.Center, line, title)
+}
+
 func (m Model) View() string {
-	return m.viewport.View()
+	return m.headerView() + "\n" + m.viewport.View()
 }

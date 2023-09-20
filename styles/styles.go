@@ -1,15 +1,18 @@
-package config
+package styles
 
 import "github.com/charmbracelet/lipgloss"
 
 var (
+	Orange = lipgloss.Color("202")
+	Grey   = lipgloss.Color("241")
+
 	ColumnStyle = lipgloss.NewStyle().
-			Padding(1, 2).
+			Padding(0, 1).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("241"))
+			BorderForeground(Grey)
 
 	FocusedStyle = lipgloss.NewStyle().
-			Padding(1, 2).
+			Padding(0, 1).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("202"))
+			BorderForeground(Orange)
 )

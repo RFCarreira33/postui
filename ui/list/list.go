@@ -8,16 +8,17 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/rfcarreira33/postui/styles"
 )
 
-type Item string
+type item string
 
 var (
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("202"))
+	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(styles.Orange)
 )
 
-func (i Item) FilterValue() string { return "" }
+func (i item) FilterValue() string { return "" }
 
 type itemDelegate struct{}
 
@@ -25,7 +26,7 @@ func (d itemDelegate) Height() int                             { return 1 }
 func (d itemDelegate) Spacing() int                            { return 0 }
 func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(Item)
+	i, ok := listItem.(item)
 	if !ok {
 		return
 	}
