@@ -1,6 +1,7 @@
 package base
 
 import (
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -8,8 +9,8 @@ import (
 )
 
 type Model struct {
-	Insert         bool
-	UrlInput       textinput.Model
+	insert         bool
+	urlInput       textinput.Model
 	selectedMethod int
 	methods        []string
 	err            error
@@ -21,18 +22,25 @@ func New() Model {
 	input.CharLimit = 200
 
 	return Model{
-		UrlInput:       input,
+		urlInput:       input,
 		selectedMethod: 0,
 		methods:        []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 	}
 }
 
 func (m Model) GetURL() string {
-	return m.UrlInput.Value()
+	return m.urlInput.Value()
 }
 
 func (m Model) GetMethod() string {
 	return m.methods[m.selectedMethod]
+}
+
+func (m *Model) pasteUrl() {
+	content, err := clipboard.ReadAll()
+	if err == nil {
+		m.urlInput.SetValue(content)
+	}
 }
 
 func (m *Model) nextMethod() {
@@ -61,25 +69,27 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			m.Insert = false
-			m.UrlInput.Blur()
+			m.insert = false
+			m.urlInput.Blur()
 		case "i":
-			m.Insert = true
-			m.UrlInput.Focus()
+			m.insert = true
+			m.urlInput.Focus()
 			return m, nil
+		case "p":
+			m.pasteUrl()
 		case "j", "down":
-			if !m.Insert {
+			if !m.insert {
 				m.nextMethod()
 			}
 		case "k", "up":
-			if !m.Insert {
+			if !m.insert {
 				m.prevMethod()
 			}
 		}
 	}
 
-	if m.Insert {
-		m.UrlInput, cmd = m.UrlInput.Update(msg)
+	if m.insert {
+		m.urlInput, cmd = m.urlInput.Update(msg)
 	}
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
@@ -87,5 +97,5 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 func (m Model) View() string {
 	methodStyle := lipgloss.NewStyle().Foreground(styles.Orange)
-	return lipgloss.JoinHorizontal(lipgloss.Left, "\t"+methodStyle.Render(m.methods[m.selectedMethod])+"\t"+m.UrlInput.View())
+	return lipgloss.JoinHorizontal(lipgloss.Left, "\t"+methodStyle.Render(m.methods[m.selectedMethod])+"\t"+m.urlInput.View())
 }
