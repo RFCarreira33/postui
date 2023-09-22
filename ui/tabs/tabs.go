@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rfcarreira33/postui/config"
+	"github.com/rfcarreira33/postui/app/helpers"
 	"github.com/rfcarreira33/postui/styles"
 )
 
@@ -47,13 +47,13 @@ var (
 )
 
 type Model struct {
-	focused config.Status
+	focused helpers.Tab
 	width   int
 }
 
 func New() Model {
 	return Model{
-		focused: config.Base,
+		focused: helpers.Base,
 		width:   100,
 	}
 }
@@ -64,14 +64,14 @@ func (m Model) Init() tea.Cmd {
 
 // Move focus
 func (m *Model) Next() {
-	m.focused = (m.focused + 1) % config.NUM_TABS
+	m.focused = (m.focused + 1) % helpers.NUM_TABS
 }
 
 func (m *Model) Prev() {
-	m.focused = (m.focused - 1 + config.NUM_TABS) % config.NUM_TABS
+	m.focused = (m.focused - 1 + helpers.NUM_TABS) % helpers.NUM_TABS
 }
 
-func (m *Model) GetFocused() config.Status {
+func (m Model) GetFocused() helpers.Tab {
 	return m.focused
 }
 
@@ -111,6 +111,6 @@ func (m Model) View() string {
 
 	// Join the tabs horizontally
 	row := lipgloss.JoinHorizontal(lipgloss.Top, rows...)
-	gap := tabGap.Render(strings.Repeat(" ", config.Max(0, m.width-lipgloss.Width(row)-2)))
+	gap := tabGap.Render(strings.Repeat(" ", helpers.Max(0, m.width-lipgloss.Width(row)-2)))
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, row, gap) + "\n\n"
 }

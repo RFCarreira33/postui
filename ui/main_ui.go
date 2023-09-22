@@ -7,47 +7,71 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rfcarreira33/postui/config"
+	"github.com/rfcarreira33/postui/app/helpers"
+	"github.com/rfcarreira33/postui/app/request"
 	"github.com/rfcarreira33/postui/ui/base"
+	"github.com/rfcarreira33/postui/ui/params"
 	"github.com/rfcarreira33/postui/ui/tabs"
 	"github.com/rfcarreira33/postui/ui/viewport"
 )
-
-type Request struct {
-	url     string
-	method  string
-	headers map[string]string
-}
 
 type MainModel struct {
 	loaded   bool
 	width    int
 	height   int
-	req      Request
+	req      request.Model
 	tabs     tabs.Model
 	base     base.Model
+	params   params.Model
 	viewport viewport.Model
-	insert   bool
-	view     bool
+	mode     helpers.Mode
 	err      error
 	quitting bool
 }
 
 func New() *MainModel {
-	headers := make(map[string]string)
-	headers["Content-Type"] = "application/json"
-	req := Request{
-		url:     "",
-		method:  "GET",
-		headers: headers,
-	}
-
 	return &MainModel{
-		req:      req,
+		req:      *request.New(),
 		tabs:     tabs.New(),
 		base:     base.New(),
+		params:   params.New(),
 		viewport: viewport.New(),
 	}
+}
+
+func (m *MainModel) makeRequest() {
+	m.req.SetURL(m.base.GetURL())
+	m.req.SetMethod(m.base.GetMethod())
+	m.req.SetParams(m.params.GetParams())
+	curl := exec.Command("curl", "-X", m.req.GetMethod(), m.req.GetURL())
+	for k, v := range m.req.GetHeaders() {
+		curl.Args = append(curl.Args, "-H", k+": "+v)
+	}
+	output, err := curl.Output()
+	if err != nil {
+		m.viewport.SetContent("Error running curl check your URL and try again")
+		return
+	}
+	var data interface{}
+	json.Unmarshal(output, &data)
+	formattedJSON, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		m.viewport.SetContent("Error formatting JSON")
+		return
+	}
+	m.viewport.SetContent(string(formattedJSON))
+}
+
+func (m MainModel) renderTab() string {
+	var tabContent = map[helpers.Tab]string{
+		helpers.Params:  m.params.View(),
+		helpers.Auth:    "Authorization Tab",
+		helpers.Headers: "Headers Tab",
+		helpers.Body:    "Body Tab",
+		helpers.Base:    m.base.View(),
+	}
+
+	return lipgloss.PlaceVertical(m.height/3, lipgloss.Top, tabContent[m.tabs.GetFocused()])
 }
 
 func (m MainModel) Init() tea.Cmd {
@@ -68,67 +92,41 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			if !m.insert {
+			if !m.mode.IsInsert() {
 				m.quitting = true
 				return m, tea.Quit
 			}
 		case "esc":
-			m.insert = false
-			m.view = false
+			m.mode = helpers.Normal
 		case "i":
-			m.insert = true
+			m.mode = helpers.Insert
 		case "v":
-			m.view = true
+			if !m.mode.IsInsert() {
+				m.mode = helpers.Visual
+			}
 		case "R":
-			if !m.insert {
-				m.req.method = m.base.GetMethod()
-				m.req.url = m.base.GetURL()
-				curl := exec.Command("curl", "-X", m.req.method, m.req.url)
-				for k, v := range m.req.headers {
-					curl.Args = append(curl.Args, "-H", k+": "+v)
-				}
-				output, err := curl.Output()
-				if err != nil {
-					m.viewport.SetContent("Error running curl check your URL")
-					break
-				}
-				var data interface{}
-				json.Unmarshal(output, &data)
-				formattedJSON, err := json.MarshalIndent(data, "", "  ")
-				if err != nil {
-					m.viewport.SetContent("Error formatting JSON")
-					break
-				}
-				m.viewport.SetContent(string(formattedJSON))
+			if !m.mode.IsInsert() {
+				m.makeRequest()
 			}
 		}
 	}
 
 	var cmd tea.Cmd
-	if !m.insert {
+	if !m.mode.IsInsert() {
 		m.tabs, cmd = m.tabs.Update(msg)
 	}
-	if m.view {
+	if m.mode.IsVisual() {
 		m.viewport, cmd = m.viewport.Update(msg)
-	} else {
-		switch m.tabs.GetFocused() {
-		default:
-			m.base, cmd = m.base.Update(msg)
-		}
+		return m, cmd
+	}
+
+	switch m.tabs.GetFocused() {
+	case helpers.Params:
+		m.params, cmd = m.params.Update(msg)
+	default:
+		m.base, cmd = m.base.Update(msg)
 	}
 	return m, cmd
-}
-
-func (m MainModel) renderTab() string {
-	var tabContent = map[config.Status]string{
-		config.Params:  "Params Tab",
-		config.Auth:    "Authorization Tab",
-		config.Headers: "Headers Tab",
-		config.Body:    "Body Tab",
-		config.Base:    m.base.View(),
-	}
-
-	return lipgloss.PlaceVertical(m.height/3, lipgloss.Top, tabContent[m.tabs.GetFocused()])
 }
 
 func (m MainModel) View() string {

@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rfcarreira33/postui/config"
+	"github.com/rfcarreira33/postui/app/helpers"
 )
 
 var (
@@ -64,7 +64,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 func (m Model) headerView() string {
 	title := titleStyle.Render("Response")
-	line := strings.Repeat("─", config.Max(0, m.viewport.Width-lipgloss.Width(title)))
+	line := strings.Repeat("─", helpers.Max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, title)
 }
 

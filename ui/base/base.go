@@ -5,14 +5,15 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/rfcarreira33/postui/app/helpers"
 	"github.com/rfcarreira33/postui/styles"
 )
 
 type Model struct {
-	insert         bool
 	urlInput       textinput.Model
 	selectedMethod int
 	methods        []string
+	mode           helpers.Mode
 	err            error
 }
 
@@ -69,26 +70,28 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			m.insert = false
+			m.mode = helpers.Normal
 			m.urlInput.Blur()
 		case "i":
-			m.insert = true
+			m.mode = helpers.Insert
 			m.urlInput.Focus()
 			return m, nil
 		case "p":
-			m.pasteUrl()
+			if !m.mode.IsInsert() {
+				m.pasteUrl()
+			}
 		case "j", "down":
-			if !m.insert {
+			if !m.mode.IsInsert() {
 				m.nextMethod()
 			}
 		case "k", "up":
-			if !m.insert {
+			if !m.mode.IsInsert() {
 				m.prevMethod()
 			}
 		}
 	}
 
-	if m.insert {
+	if m.mode.IsInsert() {
 		m.urlInput, cmd = m.urlInput.Update(msg)
 	}
 	cmds = append(cmds, cmd)
