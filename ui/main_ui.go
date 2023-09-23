@@ -56,7 +56,7 @@ func (m *MainModel) makeRequest() {
 	json.Unmarshal(output, &data)
 	formattedJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		m.viewport.SetContent("Error formatting JSON")
+		m.viewport.SetContent(string(output))
 		return
 	}
 	m.viewport.SetContent(string(formattedJSON))

@@ -9,7 +9,6 @@ type Model struct {
 
 func New() *Model {
 	headers := make(map[string]string)
-	headers["Content-Type"] = "application/json"
 	return &Model{
 		url:     "",
 		method:  "GET",
