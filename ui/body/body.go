@@ -1,25 +1,36 @@
-package params
+package body
 
 import (
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rfcarreira33/postui/app/helpers"
 	"github.com/rfcarreira33/postui/styles"
+	"github.com/rfcarreira33/postui/ui/selector"
 )
 
 type Model struct {
 	focusedInput int
 	inputs       []textinput.Model
+	textarea     textarea.Model
 	mode         helpers.Mode
 	paramsTable  table.Model
+	selector     selector.Model
 	err          error
 }
 
 func New() Model {
+	// initialize textarea
+	ta := textarea.New()
+	ta.Placeholder = "Body Data"
+
+	// initialize text inputs and the rest of the model
 	m := Model{
-		inputs: make([]textinput.Model, 2),
+		inputs:   make([]textinput.Model, 2),
+		textarea: ta,
+		selector: *selector.New([]string{"JSON", "Javascript", "HTML", "XML", "Text", "FormData"}),
 	}
 
 	var input textinput.Model
@@ -52,6 +63,10 @@ func New() Model {
 	return m
 }
 
+func (m *Model) SetWidth(width int) {
+	m.textarea.SetWidth(width)
+}
+
 func (m *Model) cycleFocus() {
 	m.inputs[m.focusedInput].Blur()
 	if m.focusedInput == len(m.inputs)-1 {
@@ -62,7 +77,7 @@ func (m *Model) cycleFocus() {
 	m.inputs[m.focusedInput].Focus()
 }
 
-func (m *Model) appendParam() {
+func (m *Model) appendData() {
 	key := m.inputs[0].Value()
 	val := m.inputs[1].Value()
 	if key == "" || val == "" {
@@ -76,13 +91,26 @@ func (m *Model) appendParam() {
 	m.paramsTable.SetRows(append(m.paramsTable.Rows(), table.Row{key, val}))
 }
 
-func (m Model) GetParams() map[string]string {
+func (m Model) GetFormData() map[string]string {
 	rows := m.paramsTable.Rows()
 	params := make(map[string]string)
 	for _, row := range rows {
 		params[row[0]] = row[1]
 	}
 	return params
+}
+
+// return body, content-type
+func (m Model) GetBody() (string, string) {
+	var body string
+	cType := m.selector.GetSelectedItem()
+	if cType == "FormData" {
+		for k, v := range m.GetFormData() {
+			body += k + "=" + v + "&"
+		}
+		return body, cType
+	}
+	return m.textarea.Value(), cType
 }
 
 func (m Model) Init() tea.Cmd {
@@ -92,6 +120,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
+	formData := m.selector.GetSelectedItem() == "FormData"
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -99,18 +128,25 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case "esc":
 			m.mode = helpers.Normal
 			m.inputs[m.focusedInput].Blur()
+			m.textarea.Blur()
 		case "i":
 			if m.mode.IsNormal() {
 				m.mode = helpers.Insert
-				m.inputs[m.focusedInput].Focus()
+				if formData {
+					m.inputs[m.focusedInput].Focus()
+				} else {
+					m.textarea.Focus()
+				}
 				return m, nil
 			}
 		case "tab":
-			if m.mode.IsInsert() {
+			if m.mode.IsInsert() && formData {
 				m.cycleFocus()
 			}
 		case "enter":
-			m.appendParam()
+			if formData {
+				m.appendData()
+			}
 		case "d":
 			if !m.mode.IsInsert() {
 				selectedRow := m.paramsTable.SelectedRow()
@@ -125,7 +161,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.paramsTable.SetRows(updatedRows)
 			}
 		case "P":
-			if !m.mode.IsInsert() {
+			if !m.mode.IsInsert() && formData {
 				m.mode = helpers.Visual
 				m.paramsTable.Focus()
 			}
@@ -133,7 +169,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 
 	if m.mode.IsInsert() {
-		m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
+		if formData {
+			m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
+		} else {
+			m.textarea, cmd = m.textarea.Update(msg)
+		}
+		cmds = append(cmds, cmd)
+	}
+	if m.mode.IsNormal() {
+		m.selector, cmd = m.selector.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 	m.paramsTable, cmd = m.paramsTable.Update(msg)
@@ -142,11 +186,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	inputs := lipgloss.JoinVertical(lipgloss.Top, "Key\t"+m.inputs[0].View(), "\nValue \t"+m.inputs[1].View(), "\n\nCheck and or remove added params with 'P'")
-	table := m.paramsTable.View() + "\nPress 'd' to delete selected row"
+	inputs := lipgloss.JoinVertical(lipgloss.Top, "Key\t"+m.inputs[0].View(), "\nValue \t"+m.inputs[1].View(), "\n\n Check and or remove added params with 'P'")
+	table := m.paramsTable.View() + "\n Press 'd' to delete selected row"
 
-	if m.mode.IsVisual() {
-		return table
+	body := m.textarea.View()
+	if m.selector.GetSelectedItem() == "FormData" {
+		if m.mode.IsVisual() {
+			return table
+		}
+		body = inputs
 	}
-	return inputs
+
+	return lipgloss.JoinVertical(lipgloss.Top, m.selector.View(), "\n"+body)
 }

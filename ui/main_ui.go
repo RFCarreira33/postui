@@ -9,7 +9,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rfcarreira33/postui/app/helpers"
 	"github.com/rfcarreira33/postui/app/request"
+	"github.com/rfcarreira33/postui/styles"
 	"github.com/rfcarreira33/postui/ui/base"
+	"github.com/rfcarreira33/postui/ui/body"
 	"github.com/rfcarreira33/postui/ui/params"
 	"github.com/rfcarreira33/postui/ui/tabs"
 	"github.com/rfcarreira33/postui/ui/viewport"
@@ -23,6 +25,7 @@ type MainModel struct {
 	tabs     tabs.Model
 	base     base.Model
 	params   params.Model
+	body     body.Model
 	viewport viewport.Model
 	mode     helpers.Mode
 	err      error
@@ -35,6 +38,7 @@ func New() *MainModel {
 		tabs:     tabs.New(),
 		base:     base.New(),
 		params:   params.New(),
+		body:     body.New(),
 		viewport: viewport.New(),
 	}
 }
@@ -43,10 +47,13 @@ func (m *MainModel) makeRequest() {
 	m.req.SetURL(m.base.GetURL())
 	m.req.SetMethod(m.base.GetMethod())
 	m.req.SetParams(m.params.GetParams())
+	body, cType := m.body.GetBody()
+	m.req.SetContentType(cType)
 	curl := exec.Command("curl", "-X", m.req.GetMethod(), m.req.GetURL())
 	for k, v := range m.req.GetHeaders() {
 		curl.Args = append(curl.Args, "-H", k+": "+v)
 	}
+	curl.Args = append(curl.Args, "-d", body)
 	output, err := curl.Output()
 	if err != nil {
 		m.viewport.SetContent("Error running curl check your URL and try again")
@@ -67,11 +74,11 @@ func (m MainModel) renderTab() string {
 		helpers.Params:  m.params.View(),
 		helpers.Auth:    "Authorization Tab",
 		helpers.Headers: "Headers Tab",
-		helpers.Body:    "Body Tab",
+		helpers.Body:    m.body.View(),
 		helpers.Base:    m.base.View(),
 	}
 
-	return lipgloss.PlaceVertical(m.height/3, lipgloss.Top, tabContent[m.tabs.GetFocused()])
+	return styles.Spacer.Render(lipgloss.PlaceVertical(m.height/3, lipgloss.Top, tabContent[m.tabs.GetFocused()]))
 }
 
 func (m MainModel) Init() tea.Cmd {
@@ -88,6 +95,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = msg.Height - 5
 			m.tabs.SetWidth(m.width)
 			m.viewport.SetSize(m.width, m.height)
+			m.body.SetWidth(m.width)
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -123,6 +131,8 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.tabs.GetFocused() {
 	case helpers.Params:
 		m.params, cmd = m.params.Update(msg)
+	case helpers.Body:
+		m.body, cmd = m.body.Update(msg)
 	default:
 		m.base, cmd = m.base.Update(msg)
 	}

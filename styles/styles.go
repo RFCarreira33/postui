@@ -29,4 +29,6 @@ var (
 	TableSelectedStyle = TableStyle.Selected.
 				Foreground(Orange).
 				Bold(false)
+
+	Spacer = lipgloss.NewStyle().Padding(0, 3)
 )

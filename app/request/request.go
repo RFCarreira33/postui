@@ -5,12 +5,12 @@ type Model struct {
 	method  string
 	headers map[string]string
 	params  string
+	body    string
 }
 
 func New() *Model {
 	headers := make(map[string]string)
 	return &Model{
-		url:     "",
 		method:  "GET",
 		headers: headers,
 	}
@@ -46,4 +46,19 @@ func (m *Model) SetParams(params map[string]string) {
 		urlEnd += key + "=" + val + "&"
 	}
 	m.params = urlEnd
+}
+
+func (m *Model) SetContentType(s string) {
+	switch s {
+	case "JSON":
+		m.headers["Content-Type"] = "application/json"
+	case "Javascript":
+		m.headers["Content-Type"] = "application/javascript"
+	case "XML":
+		m.headers["Content-Type"] = "application/xml"
+	case "HTML":
+		m.headers["Content-Type"] = "text/html"
+	case "Text":
+		m.headers["Content-Type"] = "text/plain"
+	}
 }

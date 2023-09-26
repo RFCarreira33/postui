@@ -6,15 +6,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rfcarreira33/postui/app/helpers"
-	"github.com/rfcarreira33/postui/styles"
+	"github.com/rfcarreira33/postui/ui/selector"
 )
 
 type Model struct {
-	urlInput       textinput.Model
-	selectedMethod int
-	methods        []string
-	mode           helpers.Mode
-	err            error
+	urlInput textinput.Model
+	selector selector.Model
+	mode     helpers.Mode
+	err      error
 }
 
 func New() Model {
@@ -23,18 +22,13 @@ func New() Model {
 	input.CharLimit = 200
 
 	return Model{
-		urlInput:       input,
-		selectedMethod: 0,
-		methods:        []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
+		urlInput: input,
+		selector: *selector.New([]string{"GET", "POST", "PUT", "PATCH", "DELETE"}),
 	}
 }
 
 func (m Model) GetURL() string {
 	return m.urlInput.Value()
-}
-
-func (m Model) GetMethod() string {
-	return m.methods[m.selectedMethod]
 }
 
 func (m *Model) pasteUrl() {
@@ -44,18 +38,8 @@ func (m *Model) pasteUrl() {
 	}
 }
 
-func (m *Model) nextMethod() {
-	if m.selectedMethod == len(m.methods)-1 {
-		return
-	}
-	m.selectedMethod++
-}
-
-func (m *Model) prevMethod() {
-	if m.selectedMethod == 0 {
-		return
-	}
-	m.selectedMethod--
+func (m Model) GetMethod() string {
+	return m.selector.GetSelectedItem()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -80,25 +64,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if !m.mode.IsInsert() {
 				m.pasteUrl()
 			}
-		case "j", "down":
-			if !m.mode.IsInsert() {
-				m.nextMethod()
-			}
-		case "k", "up":
-			if !m.mode.IsInsert() {
-				m.prevMethod()
-			}
 		}
 	}
 
 	if m.mode.IsInsert() {
 		m.urlInput, cmd = m.urlInput.Update(msg)
 	}
+	if m.mode.IsNormal() {
+		m.selector, cmd = m.selector.Update(msg)
+	}
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
-	methodStyle := lipgloss.NewStyle().Foreground(styles.Orange)
-	return lipgloss.JoinHorizontal(lipgloss.Left, "\t"+methodStyle.Render(m.methods[m.selectedMethod])+"\t"+m.urlInput.View())
+	return lipgloss.JoinVertical(lipgloss.Top, m.selector.View(), "\n"+m.urlInput.View())
 }
