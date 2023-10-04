@@ -12,6 +12,7 @@ import (
 	"github.com/rfcarreira33/postui/styles"
 	"github.com/rfcarreira33/postui/ui/base"
 	"github.com/rfcarreira33/postui/ui/body"
+	"github.com/rfcarreira33/postui/ui/headers"
 	"github.com/rfcarreira33/postui/ui/params"
 	"github.com/rfcarreira33/postui/ui/tabs"
 	"github.com/rfcarreira33/postui/ui/viewport"
@@ -25,6 +26,7 @@ type MainModel struct {
 	tabs     tabs.Model
 	base     base.Model
 	params   params.Model
+	headers  headers.Model
 	body     body.Model
 	viewport viewport.Model
 	mode     helpers.Mode
@@ -38,6 +40,7 @@ func New() *MainModel {
 		tabs:     tabs.New(),
 		base:     base.New(),
 		params:   params.New(),
+		headers:  headers.New(),
 		body:     body.New(),
 		viewport: viewport.New(),
 	}
@@ -47,6 +50,7 @@ func (m *MainModel) makeRequest() {
 	m.req.SetURL(m.base.GetURL())
 	m.req.SetMethod(m.base.GetMethod())
 	m.req.SetParams(m.params.GetParams())
+	m.req.SetHeaders(m.headers.GetHeaders())
 	body, cType := m.body.GetBody()
 	m.req.SetContentType(cType)
 	curl := exec.Command("curl", "-X", m.req.GetMethod(), m.req.GetURL())
@@ -59,6 +63,7 @@ func (m *MainModel) makeRequest() {
 		m.viewport.SetContent("Error running curl check your URL and try again")
 		return
 	}
+
 	var data interface{}
 	json.Unmarshal(output, &data)
 	formattedJSON, err := json.MarshalIndent(data, "", "  ")
@@ -72,8 +77,8 @@ func (m *MainModel) makeRequest() {
 func (m MainModel) renderTab() string {
 	var tabContent = map[helpers.Tab]string{
 		helpers.Params:  m.params.View(),
-		helpers.Auth:    "Authorization Tab",
-		helpers.Headers: "Headers Tab",
+		helpers.Auth:    "Authorization Tab\n\nComing Soon\n\nUse the headers tab for now",
+		helpers.Headers: m.headers.View(),
 		helpers.Body:    m.body.View(),
 		helpers.Base:    m.base.View(),
 	}
@@ -133,6 +138,8 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.params, cmd = m.params.Update(msg)
 	case helpers.Body:
 		m.body, cmd = m.body.Update(msg)
+	case helpers.Headers:
+		m.headers, cmd = m.headers.Update(msg)
 	default:
 		m.base, cmd = m.base.Update(msg)
 	}
@@ -144,6 +151,10 @@ func (m MainModel) View() string {
 		return ""
 	}
 	if m.loaded {
+		if m.width < 54 {
+			return lipgloss.NewStyle().Padding(3, 3).Render("Window Width too small to render app\n\nPlease resize")
+		}
+
 		sb := strings.Builder{}
 		sb.WriteString(m.tabs.View())
 		sb.WriteString("\n")

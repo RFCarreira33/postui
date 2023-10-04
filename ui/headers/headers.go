@@ -1,4 +1,4 @@
-package params
+package headers
 
 import (
 	"github.com/charmbracelet/bubbles/textinput"
@@ -12,7 +12,7 @@ type Model struct {
 	focusedInput int
 	inputs       []textinput.Model
 	mode         helpers.Mode
-	paramsTable  table.Model
+	headersTable table.Model
 	err          error
 }
 
@@ -39,7 +39,7 @@ func New() Model {
 		"Value": 20,
 	}
 
-	m.paramsTable = *table.New(columns, 5)
+	m.headersTable = *table.New(columns, 5)
 
 	return m
 }
@@ -65,11 +65,11 @@ func (m *Model) appendParam() {
 	m.inputs[m.focusedInput].Blur()
 	m.focusedInput = 0
 	m.inputs[m.focusedInput].Focus()
-	m.paramsTable.Append(key, val)
+	m.headersTable.Append(key, val)
 }
 
-func (m Model) GetParams() map[string]string {
-	return m.paramsTable.Get()
+func (m Model) GetHeaders() map[string]string {
+	return m.headersTable.Get()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -100,12 +100,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.appendParam()
 		case "d":
 			if !m.mode.IsInsert() {
-				m.paramsTable.Delete()
+				m.headersTable.Delete()
 			}
 		case "P":
 			if !m.mode.IsInsert() {
 				m.mode = helpers.Visual
-				m.paramsTable.Focus()
+				m.headersTable.Focus()
 			}
 		}
 	}
@@ -114,14 +114,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
 		cmds = append(cmds, cmd)
 	}
-	m.paramsTable, cmd = m.paramsTable.Update(msg)
+	m.headersTable, cmd = m.headersTable.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
-	inputs := lipgloss.JoinVertical(lipgloss.Top, "Key\t"+m.inputs[0].View(), "\nValue \t"+m.inputs[1].View(), "\n\nCheck and or remove added params with 'P'")
-	table := m.paramsTable.View() + "\nPress 'd' to delete selected row"
+	inputs := lipgloss.JoinVertical(lipgloss.Top, "Key\t"+m.inputs[0].View(), "\nValue \t"+m.inputs[1].View(), "\n\nCheck and or remove added headers with 'P'")
+	table := m.headersTable.View() + "\nPress 'd' to delete selected row"
 
 	if m.mode.IsVisual() {
 		return table

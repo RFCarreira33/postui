@@ -60,6 +60,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.mode = helpers.Insert
 			m.urlInput.Focus()
 			return m, nil
+		case "d":
+			if m.mode.IsNormal() {
+				m.urlInput.SetValue("")
+			}
 		case "p":
 			if !m.mode.IsInsert() {
 				m.pasteUrl()

@@ -9,14 +9,16 @@ type Model struct {
 }
 
 func New() *Model {
-	headers := make(map[string]string)
 	return &Model{
-		method:  "GET",
-		headers: headers,
+		method: "GET",
 	}
 }
 
 func (m *Model) GetURL() string {
+	if m.url[0] == ':' {
+		m.url = "http://localhost" + m.url
+	}
+
 	return m.url + m.params
 }
 
